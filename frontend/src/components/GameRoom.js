@@ -17,10 +17,55 @@ import {
 	Tooltip
 } from '@chakra-ui/react';
 
-import { CheckCircleIcon, } from '@chakra-ui/icons'
+import { CheckCircleIcon, CloseIcon } from '@chakra-ui/icons'
 import rock_img from "../images/stone.png";
 import paper_img from "../images/paper.png";
 import scissors_img from "../images/scissor.png";
+
+function Error(props) {
+	return (
+		<Flex
+		minH={'100vh'}
+		minW={'100vw'}
+		align={'center'}
+		justify={'center'}
+		bg='gray.50'>
+		<Container
+			maxW={'lg'}
+			bg={'white'}
+			boxShadow={'xl'}
+			rounded={'lg'}
+			p={6}
+			centerContent
+			direction={'column'}>
+	  <Box textAlign="center" py={10} px={6}>
+		<Box display="inline-block">
+		  <Flex
+			flexDirection="column"
+			justifyContent="center"
+			alignItems="center"
+			bg={'red.500'}
+			rounded={'50px'}
+			w={'55px'}
+			h={'55px'}
+			textAlign="center">
+			<CloseIcon boxSize={'20px'} color={'white'} />
+		  </Flex>
+		</Box>
+		<Heading as="h2" size="xl" mt={6} mb={2}>
+		  Error
+		</Heading>
+		<Text color={'gray.500'}>
+			Sorry, the connection was forcibly terminated. That happens.
+		</Text>
+	  </Box>
+	  	<Button onClick={() => window.location.reload()}>
+			Try again
+		</Button>
+	  </Container>
+	  </Flex>
+	);
+  }
 
 
 function GameRoom(props) {
@@ -34,10 +79,11 @@ function GameRoom(props) {
 	const [gameStarted, isGameStarted] = useState(false);
 	const [gameEnded, isGameEnded] = useState(false);
 	const [myChoice, setMyChoice] = useState("rock");
-	const [countDown, setCountDown] = useState(100);
+	const [countDown, setCountDown] = useState(50);
 	const [readyBtnActive, setReadyBtnActive] = useState(true);
 	const [result, setResult] = useState(null);
 	const [authHeaders, setAuthHeaders] = useState(props.authHeaders);
+	const [websocketError, setWebsocketError] = useState(false);
 
 	const CircleIcon = (props) => (
 		<Icon viewBox='0 0 200 200' {...props}>
@@ -72,8 +118,8 @@ function GameRoom(props) {
 		isGameStarted(false)
 		isGameEnded(true)
 		setReadyBtnActive(false)
-		websocket.send(JSON.stringify({ result: myChoice, user: currentUser }))
-		console.log(JSON.stringify({ result: myChoice, user: currentUser }))
+		websocket.send(JSON.stringify({result: { roomNumber: roomNumber, item: myChoice, user: currentUser }}))
+		console.log(JSON.stringify({result: { roomNumber: roomNumber, item: myChoice, user: currentUser }}))
 	}
 
 
@@ -85,6 +131,7 @@ function GameRoom(props) {
 				// например, сервер убил процесс или сеть недоступна
 				// обычно в этом случае event.code 1006
 				console.log('[close] Соединение прервано', event);
+				setWebsocketError(true)
 			}
 		};
 
@@ -107,17 +154,7 @@ function GameRoom(props) {
 					setOpponentStatus(data.opponent_status)
 				} if (command == "start") {
 					isGameStarted(true)
-				} if (command == "get_game_info") {
-					websocket.send(
-						JSON.stringify({
-							"game_result": {
-								"room_number": roomNumber,
-								"user_info": currentUser.id,
-								"result": JSON.stringify(result),
-							}
-						})
-					)
-				}
+				} 
 			}
 			if (data.result) {
 				setResult(data.result)
@@ -134,7 +171,8 @@ function GameRoom(props) {
 		}
 	}
 
-	if (result == null) {
+	if (websocketError == false) {
+if (result == null) {
 		return (
 			<Flex
 				minH={'100vh'}
@@ -292,7 +330,13 @@ function GameRoom(props) {
 				<ResultCard result={result}></ResultCard>
 			</div>
 		)
+	}		
+	} else {
+		return (
+			<Error roomNumber={roomNumber}></Error>
+		)
 	}
+	
 }
 
 export default GameRoom;

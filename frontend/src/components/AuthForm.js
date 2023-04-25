@@ -144,7 +144,7 @@ function AuthForm(props) {
 			let signature = token_array.slice(2).join()
 			console.log(signature, "signature")
 			document.cookie = `signature=${signature}; `
-			document.cookie = `header_payload=${header_payload}; max_age=1800;`
+			document.cookie = `header_payload=${header_payload}; max_age=86400;`
 		} else {
 			document.cookie = `signature=0; secure; max_age=-1;`
 			document.cookie = `header_payload=0; secure; max_age=-1;`
@@ -223,13 +223,6 @@ function AuthForm(props) {
 		})
 	}
 
-	const handleJustifyClick = (value) => {
-		if (value === justifyActive) {
-			return;
-		}
-		setJustifyActive(value);
-	};
-
 	return (
 		<Flex
 			minH={'100vh'}
@@ -278,6 +271,7 @@ function AuthForm(props) {
 											<Link color={'blue.400'}>Forgot password?</Link>
 										</Stack>
 										<Button
+											id='signin-button'
 											isDisabled={isLogDisabled}
 											onClick={handleClick}
 											bg={'blue.400'}
@@ -355,6 +349,7 @@ function AuthForm(props) {
 											</MDBTypography>
 										}
 										<Button
+											id='signup-button'
 											isDisabled={isRegDisabled}
 											loadingText="Submitting"
 											onClick={handleSignUp}

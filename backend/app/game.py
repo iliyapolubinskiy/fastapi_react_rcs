@@ -1,5 +1,3 @@
-import ast
-import json
 from fastapi import WebSocket
 from .db.database import SessionLocal
 from .db import crud
@@ -7,6 +5,9 @@ from uuid import UUID
 
 class Game:
 
+    """
+    Managing game proccess
+    """
 
     def __init__(self, manager):
         self.manager = manager
@@ -16,140 +17,172 @@ class Game:
 
 
     async def add_readies(self, websocket: WebSocket):
+        """
+        Add websocket connetion to ready list.
+        Usable for notify second player that player joined/left
+        """
         if websocket not in self.readies:
             self.readies.append(websocket)
         amount_of_ready = 0
         for ws in self.readies:
             if ws.get("path") == websocket.get("path"):
                 amount_of_ready += 1
-                print(amount_of_ready)
                 await self.send_status_to_opponent(websocket, status = True)
         if amount_of_ready == 2:
             for ws in self.readies:
                 if ws.get("path") == websocket.get("path"):
-                    print(amount_of_ready)
                     await self.send_status_to_opponent(websocket, status = True)
                     await ws.send_json({"command": "start"})
 
 
     async def remove_readies(self, websocket):
+        """
+        Remove websocket connection from ready list
+        """
         if websocket in self.readies:
             self.readies.remove(websocket)
         await self.send_status_to_opponent(websocket, status = False)
 
 
     async def send_status_to_opponent(self, websocket: WebSocket, status: bool):
+        """
+        Method to send data to connections in room about connections amount
+        """
         path = websocket.get("path")
-        opponent = None
         for ws in self.manager.active_connections:
             if ws != websocket and ws.get("path") == path:
-                opponent = ws
-        if opponent is not None:
-            await opponent.send_json({"command": "update_opponent_status",
+                await ws.send_json({"command": "update_opponent_status",
                                       "opponent_status": status})
 
 
-    async def on_game_over(self, path: str, gamer: int, result: str, websocket: WebSocket):
-        if not self.games.get(path):
+    async def update_players_status(self, websocket):
+        for ws in self.manager.active_connections:
+            if ws.get("path") == websocket.get("path") and ws != websocket:
+                await websocket.send_json({"command": "update_opponent_status",
+                                      "opponent_status": ws in self.readies})
+
+
+    async def on_game_over(self, path: str, gamer: int, result: dict):
+        """
+        will be commented soon
+        """
+
+        if not self.games.get(path): 
             self.games[path] = {}
         self.games[path][gamer] = result
 
+
+        # self.games[path][gamer] = { roomNumber: roomNumber, item: myChoice, user: currentUser }
         if len(self.games[path]) == 2:
             await self.get_winner(self.games[path], path)
             self.games[path] = {}   
         
 
     async def get_winner(self, result: dict, path: str):
-        values=[]
-        keys=[]
-        for k, v in result.items():
+        """
+        method to get winner, loser, items
+        """
+        values=[] # gamer1, gamer2
+        keys=[] # {roomNumber: roomNumber, item: myChoice, user: currentUser}, {roomNumber: roomNumber, item: myChoice, user: currentUser}
+        for k, v in result.items(): # (gamer1, {roomNumber: roomNumber, item: myChoice, user: currentUser}),  (gamer2, {roomNumber: roomNumber, item: myChoice, user: currentUser})
             values.append(v)
             keys.append(k)
 
-        if values[0] == values[1]:
-            await self.send_result(path, keys[1], keys[0], {"winner": "no one", "item": values[0]})
-        elif values[0] == "rock" and values[1] == "paper":
-            await self.send_result(path, keys[1], keys[0], {"winner": {keys[1]: values[1]}, "loser": {keys[0]: values[0]}})
-        elif values[0] == "rock" and values[1] == "scissors":
-            await self.send_result(path, keys[0], keys[1], {"winner": {keys[0]: values[0]}, "loser": {keys[1]: values[1]}})
-        elif values[0] == "paper" and values[1] == "rock":
-            await self.send_result(path, keys[0], keys[1], {"winner": {keys[0]: values[0]}, "loser": {keys[1]: values[1]}})
-        elif values[0] == "paper" and values[1] == "scissors":
-            await self.send_result(path, keys[1], keys[0], {"winner": {keys[1]: values[1]}, "loser": {keys[0]: values[0]}})
-        elif values[0] == "scissors" and values[1] == "rock":
-            await self.send_result(path, keys[1], keys[0], {"winner": {keys[1]: values[1]}, "loser": {keys[0]: values[0]}})
-        elif values[0] == "scissors" and values[1] == "paper":
-            await self.send_result(path, keys[0], keys[1], {"winner": {keys[0]: values[0]}, "loser": {keys[1]: values[1]}})
+        # result[keys[0]] = {roomNumber: roomNumber, item: myChoice, user: currentUser} from gamer1
+
+        if values[0]["item"] == values[1]["item"]:
+            await self.send_result(path, keys[1], keys[0], {"winner": {keys[1]: result[keys[1]]}, "loser": {keys[0]: result[keys[0]]}}, is_dead_heat=True)
+        elif values[0]["item"] == "rock" and values[1]["item"] == "paper":
+            await self.send_result(path, keys[1], keys[0], {"winner": {keys[1]: result[keys[1]]}, "loser": {keys[0]: result[keys[0]]}})
+        elif values[0]["item"] == "rock" and values[1]["item"] == "scissors":
+            await self.send_result(path, keys[0], keys[1], {"winner": {keys[0]: result[keys[0]]}, "loser": {keys[1]: result[keys[1]]}})
+        elif values[0]["item"] == "paper" and values[1]["item"] == "rock":
+            await self.send_result(path, keys[0], keys[1], {"winner": {keys[0]: result[keys[0]]}, "loser": {keys[1]: result[keys[1]]}})
+        elif values[0]["item"] == "paper" and values[1]["item"] == "scissors":
+            await self.send_result(path, keys[1], keys[0], {"winner": {keys[1]: result[keys[1]]}, "loser": {keys[0]: result[keys[0]]}})
+        elif values[0]["item"] == "scissors" and values[1]["item"] == "rock":
+            await self.send_result(path, keys[1], keys[0], {"winner": {keys[1]: result[keys[1]]}, "loser": {keys[0]: result[keys[0]]}})
+        elif values[0]["item"] == "scissors" and values[1]["item"] == "paper":
+            await self.send_result(path, keys[0], keys[1], {"winner": {keys[0]: result[keys[0]]}, "loser": {keys[1]: result[keys[1]]}})
 
     
-    async def send_result(self, path, winner, loser, result):
+    async def send_result(self, path: str, winner: int, loser: int, result: dict, is_dead_heat=False): #result = {"winner": {keys[0]: {roomNumber: roomNumber, item: myChoice, user: currentUser}}, "loser": {keys[1]: {roomNumber: roomNumber, item: myChoice, user: currentUser}}}
+        """
+        Send message with result to websockets
+        """
         clients = []
         for ws in self.manager.active_connections:
             if path == ws.get("path"):
                 client = ws.get("client")[1]
-                if result.get("winner") != "no one": 
+                winner_item = result.get('winner').get(winner).get('item')
+                loser_item = result.get('loser').get(loser).get('item')
+                if not is_dead_heat: 
                     if client == winner:
                         await ws.send_json({"result": {
                                             "win": True,
-                                            "winner_item": result.get("winner").get(winner),
-                                            "loser_item": result.get("loser").get(loser),
+                                            "winner_item": winner_item,
+                                            "loser_item": loser_item,
                                             "result": result
                                             }})
                     elif client == loser:
                         await ws.send_json({"result": {
                                             "win": False,
-                                            "winner_item": result.get("winner").get(winner),
-                                            "loser_item": result.get("loser").get(loser),
+                                            "winner_item": winner_item,
+                                            "loser_item": loser_item,
                                             "result": result
                                             }})
-                elif result.get("winner") == "no one":
+                elif is_dead_heat:
                     await ws.send_json({"result": {
-                                        "win": "no one",
-                                        "item": result.get("item"),
-                                        }})
+                        "win": False,
+                        "winner_item": winner_item,
+                        "loser_item": loser_item,
+                        "result": result
+                    }})
                     
                 clients.append(ws)
 
         for ws in clients:
-            await self.get_user_info(ws)
+            self.save_result_to_db(is_dead_heat, result)
             await self.remove_readies(ws)
             await self.manager.disconnect(ws)
 
-
-    async def get_user_info(self, ws: WebSocket):
-        await ws.send_json({"command": "get_game_info"})
-
     
-    def take_result(self, result: dict):
-        room_id = result.get("room_number")
+    def save_result_to_db(self, is_dead_heat: bool, result: dict[dict]): #  result = {"winner": {keys[0]: {roomNumber: roomNumber, item: myChoice, user: currentUser}}, "loser": {keys[1]: {roomNumber: roomNumber, item: myChoice, user: currentUser}}}
+        """
+        Save result to database. Changing room status
+        """
+        
+        winner = list(result["winner"].keys())[0], #
+        loser = list(result["loser"].keys())[0], #
+
+        winner = winner[0]
+        loser = loser[0]
+
+        data = {
+            "winner": winner, 
+            "loser": winner, 
+            "winner_item": result["winner"][winner]["item"],
+            "loser_item": result["loser"][loser]["item"],
+            "winner_id": result["winner"][winner]["user"]['id'],
+            "loser_id": result["loser"][loser]["user"]['id'],
+            "is_dead_heat": is_dead_heat,
+            "room_number": result["winner"][winner]["roomNumber"],
+        }
+
+        room_id = data.get("room_number")
         if self.results.get(room_id) is None:
-            self.results[room_id] = result
+            self.results[room_id] = data
             print(result)
-        elif self.results.get(room_id) is not None:
+            print("SELF RESULTS IS NONE")
+        else:
+            print("SELF RESULTS IS NOT NONE")
             try:
-                result_2 = self.results.get(room_id)
-                first_player, second_player = result.get("user_info"), result_2.get("user_info")
-                result["result"] = json.loads(result.get("result")) if type(result.get("result")) == str else result.get("result")
-                result_2["result"] = json.loads(result_2.get("result")) if type(result_2.get("result")) == str else result_2.get("result")
+                data_2 = self.results.get(room_id)
+                winner_id = data.get('winner_id')
+                loser_id = data_2.get('loser_id')
                 room_id = UUID(room_id)
-                if result.get("result") == result_2.get("result"):
-                    is_dead_heat = True
-                    winner_id = result.get("user_info")
-                    loser_id = result_2.get("user_info")
-                    winner_item = result.get("result").get("item")
-                    loser_item = result_2.get("result").get("item")
-                else:
-                    is_dead_heat = False
-                    if result.get("result").get("win") == True:
-                        winner_id = result.get("user_info")
-                        loser_id = result_2.get("user_info")
-                        winner_item = result.get("result").get("winner_item")
-                        loser_item = result_2.get("result").get("loser_item")
-                    elif result_2.get("result").get("win") == True:
-                        winner_id = result_2.get("user_info")
-                        loser_id = result.get("user_info")
-                        winner_item = result_2.get("result").get("winner_item")
-                        loser_item = result.get("result").get("loser_item")
+                winner_item = data.get('winner_item')
+                loser_item = data.get('loser_item')
                 crud.save_result(
                     SessionLocal(),
                     is_dead_heat,
@@ -159,6 +192,6 @@ class Game:
                     loser_item,
                     room_id
                 )
-                crud.update_room_status_to_played(SessionLocal(), room_id, first_player, second_player)
+                crud.update_room_status_to_played(SessionLocal(), room_id, winner_id, loser_id)
             finally:
                 self.results[room_id] = None

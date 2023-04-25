@@ -63,7 +63,6 @@ function MainMenu(props) {
             setError({ code: null, message: null })
             axios.get(`http://${window.location.hostname}:8000/rooms/${room}`, { authHeaders }
             ).then(response => {
-                console.log(response.status, "response status")
                 if (response.status === 200) {
                     setRoomAvailable(true)
                 } else if (response.status !== 200) {
@@ -182,8 +181,8 @@ function MainMenu(props) {
                 <Text
                     mt={2}
                     textAlign={'center'}
-                    color={error.code != null ? 'red.500' : 'gray.500'}>
-                    {error.code !== null
+                    color={!roomAvailable ? 'red.500' : 'gray.500'}>
+                    {!roomAvailable
                         ? `${error.code} 😢 ${error.message}`
                         : "Good luck ✌️"}
                 </Text>

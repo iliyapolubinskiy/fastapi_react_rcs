@@ -146,21 +146,19 @@ async def websocket_endpoint(websocket: WebSocket):
     if manager.get_connections_amount(websocket.get("path")) < 2:
         await manager.connect(websocket)
         await manager.send_connections_amount(websocket.get("path"))
+        await game.update_players_status(websocket)
         try:
             while True:
                 data = await websocket.receive_text()
                 data = ast.literal_eval(data)
-                if data.get("game_result"):
-                    game.take_result(
-                        data.get("game_result")
-                    )
                 if data.get("command"):
                     await commands(websocket, data)
                 elif data.get("result"):
                     path = websocket.get("path")
                     gamer = websocket.get("client")[1]
-                    result = data.get('result')
-                    await game.on_game_over(path, gamer, result, websocket)
+                    result = data.get('result') # data = {result: { item: myChoice, user: currentUser }}
+                    print("Result: ", result)
+                    await game.on_game_over(path=path, gamer=gamer, result=result)
         except WebSocketDisconnect:
             await manager.disconnect(websocket)
             await game.remove_readies(websocket)

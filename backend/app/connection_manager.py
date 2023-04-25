@@ -13,7 +13,6 @@ class ConnectionManager:
         await websocket.accept()
         if websocket not in self.active_connections:
             self.active_connections.append(websocket)
-        print(websocket.__dict__)
 
 
     async def disconnect(self, websocket: WebSocket):

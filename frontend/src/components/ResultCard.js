@@ -16,14 +16,11 @@ export default function ResultCard(props) {
 			} else if (props.result.win == false) {
 				setMyItem(props.result.loser_item)
 				setOpponentItem(props.result.winner_item)
-			} else {
-				setMyItem(props.result.item)
-				setOpponentItem(props.result.item)
 			}
 		}
 	});
 
-	if (props.result.win != "no one") {
+	if (myItem != opponentItem) {
 		return (
 			<Box textAlign="center" py={10} px={6}>
 				{props.result.win ? <CheckCircleIcon boxSize={'50px'} color={'green.500'} /> :
